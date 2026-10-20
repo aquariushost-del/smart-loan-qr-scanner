@@ -10,6 +10,12 @@ main{max-width:540px;margin:auto}section{background:white;border:1px solid #d8de
 button{font:inherit;background:#f67c25;color:#161616;border:0;border-radius:9px;padding:12px 16px;margin:6px 5px 6px 0}
 button:disabled{opacity:.45}#reader{width:100%}#result{font-size:22px;font-weight:700;overflow-wrap:anywhere}
 small{color:#667085}h1{color:#161616;border-bottom:4px solid #f67c25;padding-bottom:16px}a{color:#873f12}button:hover:not(:disabled){background:#d2691e}input{max-width:100%}
+[hidden]{display:none!important}
+#scanResult{scroll-margin-top:16px}
+#use{display:block;box-sizing:border-box;width:100%;min-height:64px;font-size:20px;font-weight:700;white-space:normal;margin:12px 0}
+.result-tools{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.result-tools button{width:100%;min-height:48px;margin:0;background:#f3f4f6;color:#303030;border:1px solid #d8dee9}
+.result-tools button:hover:not(:disabled){background:#e5e7eb}
 </style>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
@@ -30,12 +36,14 @@ small{color:#667085}h1{color:#161616;border-bottom:4px solid #f67c25;padding-bot
 <p><input id="photo" type="file" accept="image/*" capture="environment"></p>
 <p id="photoStatus"></p>
 </section>
-<section>
+<section id="scanResult">
 <h2>Scanned Item ID</h2>
 <p id="result" aria-live="polite">No code scanned yet.</p>
+<button id="use" disabled hidden>Use This Item</button>
+<div class="result-tools">
 <button id="copy" disabled>Copy Item ID</button>
 <button id="reset">Clear</button>
-<button id="use" disabled hidden>Use This Item</button>
+</div>
 <a id="returnLink" hidden>Return to loan system</a>
 </section>
 <small>Test on iPhone Safari and Android Chrome. Grant camera access if prompted. The QR decoding library needs an internet connection.</small>
@@ -85,7 +93,9 @@ small{color:#667085}h1{color:#161616;border-bottom:4px solid #f67c25;padding-bot
     get('returnLink').hidden = true;
     setStatus('QR code read successfully. No loan records were changed.');
     stopCamera().then(() => {
-      window.scrollTo({top: 0, left: 0, behavior: 'smooth'});
+      requestAnimationFrame(() => {
+        get('scanResult').scrollIntoView({behavior: 'smooth', block: 'start'});
+      });
     });
   }
   async function startCamera() {
