@@ -86,7 +86,7 @@ small{color:#667085}h1{color:#161616;border-bottom:4px solid #f67c25;padding-bot
     setStatus('QR code read successfully. No loan records were changed.');
     stopCamera();
   }
-  get('start').addEventListener('click', async () => {
+  async function startCamera() {
     if (running || stopping) return;
     if (typeof Html5Qrcode === 'undefined') {
       setStatus('QR scanner library could not load. Check your internet connection.');
@@ -104,16 +104,18 @@ small{color:#667085}h1{color:#161616;border-bottom:4px solid #f67c25;padding-bot
     running = true;
     get('start').disabled = true;
     get('stop').disabled = false;
+    setStatus('Opening rear camera... Allow camera access if prompted.');
     try {
       await instance.start({facingMode:'environment'},
         {fps:10,qrbox:{width:230,height:230}},
         scanned, () => {});
       if (running) setStatus('Point your camera at the QR code.');
     } catch (error) {
-      setStatus('Camera failed: ' + (error.message || error));
+      setStatus('Camera could not start automatically. Tap Start Camera to try again, or use the photo option. ' + (error.message || error));
       await stopCamera();
     }
-  });
+  }
+  get('start').addEventListener('click', startCamera);
   get('stop').addEventListener('click', async () => {
     await stopCamera();
     setStatus('Camera stopped.');
@@ -179,6 +181,9 @@ small{color:#667085}h1{color:#161616;border-bottom:4px solid #f67c25;padding-bot
     get('returnLink').hidden = true;
   });
   window.addEventListener('pagehide', () => { stopCamera(); });
+  // The app's Scan action already expresses intent to use the camera.
+  // Standalone visits remain manual; both loan and return launches start immediately.
+  if (returnUrl) startCamera();
 })();
 </script>
 </body>
