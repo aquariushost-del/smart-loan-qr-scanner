@@ -84,7 +84,9 @@ small{color:#667085}h1{color:#161616;border-bottom:4px solid #f67c25;padding-bot
     get('use').disabled = false;
     get('returnLink').hidden = true;
     setStatus('QR code read successfully. No loan records were changed.');
-    stopCamera();
+    stopCamera().then(() => {
+      window.scrollTo({top: 0, left: 0, behavior: 'smooth'});
+    });
   }
   async function startCamera() {
     if (running || stopping) return;
