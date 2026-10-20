@@ -16,7 +16,7 @@ small{color:#667085}input{max-width:100%}
 <body>
 <main>
 <h1>Smart Loan QR Scanner</h1>
-<p>Mobile camera proof of concept. Scan a QR code containing an Item ID. This page does not access inventory or create loans.</p>
+<p>Scan an equipment Item ID. When opened from the loan system, tap Use Item after scanning, then review and confirm the loan or return there. This scanner does not access your inventory or save transactions.</p>
 <section>
 <h2>Live camera</h2>
 <div id="reader"></div>
@@ -35,6 +35,8 @@ small{color:#667085}input{max-width:100%}
 <p id="result" aria-live="polite">No code scanned yet.</p>
 <button id="copy" disabled>Copy Item ID</button>
 <button id="reset">Clear</button>
+<button id="use" disabled hidden>Use This Item</button>
+<a id="returnLink" hidden>Return to loan system</a>
 </section>
 <small>Test on iPhone Safari and Android Chrome. Grant camera access if prompted. The QR decoding library needs an internet connection.</small>
 </main>
@@ -43,6 +45,21 @@ small{color:#667085}input{max-width:100%}
   'use strict';
   const get = id => document.getElementById(id);
   let camera = null, running = false, stopping = false, lastValue = '';
+  const params = new URLSearchParams(location.search);
+  const nonce = params.get('scanNonce') || '';
+  const mode = params.get('scanMode') === 'return' ? 'return' : 'loan';
+  let returnUrl = null, parentOrigin = '';
+  try {
+    const candidate = new URL(params.get('returnTo'));
+    const parent = new URL(params.get('parentOrigin'));
+    if (candidate.origin === 'https://script.google.com' && /^\/macros\/s\/[A-Za-z0-9_-]+\/(exec|dev)$/.test(candidate.pathname) &&
+        parent.protocol === 'https:' && (parent.hostname === 'script.google.com' || parent.hostname === 'script.googleusercontent.com' || parent.hostname.endsWith('-script.googleusercontent.com') || parent.hostname.endsWith('.script.googleusercontent.com')) &&
+        /^[a-f0-9]{32}$/.test(nonce)) {
+      returnUrl = candidate; parentOrigin = parent.origin;
+      get('use').hidden = false;
+      get('use').textContent = mode === 'return' ? 'Use Item for Return' : 'Use Item for New Loan';
+    }
+  } catch (_) {}
   const setStatus = message => { get('status').textContent = message; };
   async function stopCamera() {
     if (stopping) return;
@@ -60,10 +77,12 @@ small{color:#667085}input{max-width:100%}
   }
   function scanned(value) {
     const id = String(value || '').trim();
-    if (!id) return;
+    if (!id || id.length > 200 || /[\x00-\x1f\x7f]/.test(id)) { setStatus('Scan a QR code containing only an Item ID (maximum 200 characters).'); return; }
     lastValue = id;
     get('result').textContent = id;
     get('copy').disabled = false;
+    get('use').disabled = false;
+    get('returnLink').hidden = true;
     setStatus('QR code read successfully. No loan records were changed.');
     stopCamera();
   }
@@ -132,10 +151,32 @@ small{color:#667085}input{max-width:100%}
       setStatus('Clipboard unavailable. Copy the Item ID shown above manually.');
     }
   });
+  window.addEventListener('message', event => {
+    if (event.source === window.opener && event.origin === parentOrigin && event.data &&
+        event.data.type === 'smart-loan-qr-accepted' && event.data.nonce === nonce) window.close();
+  });
+  get('use').addEventListener('click', () => {
+    if (!lastValue || !returnUrl) return;
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage({type:'smart-loan-qr-result', itemId:lastValue, nonce}, parentOrigin);
+      setStatus('Item ID sent. Switch back to the loan system to review the equipment.');
+      // Wait for acknowledgement so a blocked connection never silently loses the ID.
+    }
+    // Fallback when the mobile browser cannot preserve the opener connection.
+    const link = new URL(returnUrl.href);
+    link.searchParams.set('scannedItemId', lastValue);
+    link.searchParams.set('scanMode', mode);
+    link.searchParams.set('scanNonce', nonce);
+    get('returnLink').href = link.href;
+    get('returnLink').hidden = false;
+    get('returnLink').textContent = 'If the form did not open, return to the loan system here';
+  });
   get('reset').addEventListener('click', () => {
     lastValue = '';
     get('result').textContent = 'No code scanned yet.';
     get('copy').disabled = true;
+    get('use').disabled = true;
+    get('returnLink').hidden = true;
   });
   window.addEventListener('pagehide', () => { stopCamera(); });
 })();
