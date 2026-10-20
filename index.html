@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Loan QR Scanner Test</title>
+<style>
+body{font-family:system-ui,-apple-system,sans-serif;background:#f4f6fa;color:#182230;margin:0;padding:20px}
+main{max-width:540px;margin:auto}section{background:white;border:1px solid #d8dee9;border-radius:12px;padding:18px;margin:14px 0}
+button{font:inherit;background:#175cd3;color:white;border:0;border-radius:9px;padding:12px 16px;margin:6px 5px 6px 0}
+button:disabled{opacity:.45}#reader{width:100%}#result{font-size:22px;font-weight:700;overflow-wrap:anywhere}
+small{color:#667085}input{max-width:100%}
+</style>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+<main>
+<h1>Smart Loan QR Scanner</h1>
+<p>Mobile camera proof of concept. Scan a QR code containing an Item ID. This page does not access inventory or create loans.</p>
+<section>
+<h2>Live camera</h2>
+<div id="reader"></div>
+<button id="start">Start Camera</button>
+<button id="stop" disabled>Stop Camera</button>
+<p id="status" role="status">Ready to scan.</p>
+</section>
+<section>
+<h2>Photo fallback</h2>
+<label for="photo">Choose or take a photo of a QR code</label>
+<p><input id="photo" type="file" accept="image/*" capture="environment"></p>
+<p id="photoStatus"></p>
+</section>
+<section>
+<h2>Scanned Item ID</h2>
+<p id="result" aria-live="polite">No code scanned yet.</p>
+<button id="copy" disabled>Copy Item ID</button>
+<button id="reset">Clear</button>
+</section>
+<small>Test on iPhone Safari and Android Chrome. Grant camera access if prompted. The QR decoding library needs an internet connection.</small>
+</main>
+<script>
+(() => {
+  'use strict';
+  const get = id => document.getElementById(id);
+  let camera = null, running = false, stopping = false, lastValue = '';
+  const setStatus = message => { get('status').textContent = message; };
+  async function stopCamera() {
+    if (stopping) return;
+    stopping = true;
+    const current = camera;
+    camera = null;
+    running = false;
+    get('start').disabled = false;
+    get('stop').disabled = true;
+    if (current) {
+      try { await current.stop(); } catch (_) {}
+      try { await current.clear(); } catch (_) {}
+    }
+    stopping = false;
+  }
+  function scanned(value) {
+    const id = String(value || '').trim();
+    if (!id) return;
+    lastValue = id;
+    get('result').textContent = id;
+    get('copy').disabled = false;
+    setStatus('QR code read successfully. No loan records were changed.');
+    stopCamera();
+  }
+  get('start').addEventListener('click', async () => {
+    if (running || stopping) return;
+    if (typeof Html5Qrcode === 'undefined') {
+      setStatus('QR scanner library could not load. Check your internet connection.');
+      return;
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setStatus('Camera API is unavailable in this browser.');
+      return;
+    }
+    const instance = new Html5Qrcode('reader', {
+      formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+      verbose: false
+    });
+    camera = instance;
+    running = true;
+    get('start').disabled = true;
+    get('stop').disabled = false;
+    try {
+      await instance.start({facingMode:'environment'},
+        {fps:10,qrbox:{width:230,height:230}},
+        scanned, () => {});
+      if (running) setStatus('Point your camera at the QR code.');
+    } catch (error) {
+      setStatus('Camera failed: ' + (error.message || error));
+      await stopCamera();
+    }
+  });
+  get('stop').addEventListener('click', async () => {
+    await stopCamera();
+    setStatus('Camera stopped.');
+  });
+  get('photo').addEventListener('change', async event => {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    await stopCamera();
+    if (typeof Html5Qrcode === 'undefined') {
+      get('photoStatus').textContent = 'QR scanner library unavailable.';
+      return;
+    }
+    const instance = new Html5Qrcode('reader', {
+      formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+      verbose: false
+    });
+    get('photoStatus').textContent = 'Reading photo...';
+    try {
+      const decoded = await instance.scanFile(file, true);
+      scanned(decoded);
+      get('photoStatus').textContent = 'QR code found.';
+    } catch (error) {
+      get('photoStatus').textContent = 'Could not read QR code from photo.';
+    } finally {
+      try { await instance.clear(); } catch (_) {}
+      event.target.value = '';
+    }
+  });
+  get('copy').addEventListener('click', async () => {
+    if (!lastValue) return;
+    try {
+      await navigator.clipboard.writeText(lastValue);
+      setStatus('Item ID copied.');
+    } catch (_) {
+      setStatus('Clipboard unavailable. Copy the Item ID shown above manually.');
+    }
+  });
+  get('reset').addEventListener('click', () => {
+    lastValue = '';
+    get('result').textContent = 'No code scanned yet.';
+    get('copy').disabled = true;
+  });
+  window.addEventListener('pagehide', () => { stopCamera(); });
+})();
+</script>
+</body>
+</html>
